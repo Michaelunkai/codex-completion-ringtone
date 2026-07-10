@@ -1,0 +1,12 @@
+# Runtime output and machine-local state
+completion-alert-state/
+*.log
+*.jsonl
+*.lock
+.env
+.env.*
+
+# Do not publish audio or a machine-specific audio path.
+*.wav
+*.mp3
+src/ringtone-audio-path.txt
