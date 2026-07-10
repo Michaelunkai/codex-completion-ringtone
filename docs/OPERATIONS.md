@@ -59,7 +59,20 @@ An obsolete Stop, SessionEnd, or transcript watcher invoked it. Keep the gate st
 
 ### Final hook reports `duplicate_suppressed`
 
-The same turn/session key rang within 60 seconds. Use a new `turn_id` or `--force` for a deliberate test.
+This applies only to optional non-notify fallback sources. `notify ... turn-ended` is never deduped: it is the sole enabled canonical completion source and must play once for every completed turn.
+
+### Android reports a pinned device is not connected
+
+The Android ringtone selector is deliberately kept at `%USERPROFILE%\.codex\hooks\Play-CodexAndroidCompletionRingtone.ps1`, outside `completion-alert-state`. Its companion file `%USERPROFILE%\.codex\hooks\android-ringtone-device-id.txt` contains the physical phone serial reported by `getprop ro.serialno`.
+
+Wireless ADB mDNS transport names can contain spaces and may appear more than once for one physical phone. The selector must:
+
+1. enumerate `adb devices`;
+2. query each candidate with `adb -s <candidate> shell getprop ro.serialno`;
+3. select a candidate matching the pinned physical serial; and
+4. use `adb -s <selected candidate>` for every subsequent command.
+
+Never call bare `adb shell` from the ringtone path. That fails with `more than one device/emulator` when duplicate wireless transports exist. Restore the connection with `aadb connect`, then run the deliberate test above.
 
 ### `local_player_started` but no sound
 

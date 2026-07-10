@@ -11,7 +11,9 @@ const CODEX_HOME = process.env.CODEX_HOME || path.join(USER_HOME, ".codex");
 const STATE_DIR = path.join(CODEX_HOME, "hooks", "completion-alert-state");
 const SESSIONS_DIR = path.join(CODEX_HOME, "sessions");
 const PS1_PATH = path.join(STATE_DIR, "Play-CodexCompletionRingtone.ps1");
-const ANDROID_ALERT_PS1 = path.join(STATE_DIR, "Play-CodexAndroidCompletionRingtone.ps1");
+// Keep the device transport selector outside generated state so cleanup cannot
+// erase it between Codex sessions.
+const ANDROID_ALERT_PS1 = path.join(CODEX_HOME, "hooks", "Play-CodexAndroidCompletionRingtone.ps1");
 const AUDIO_CONFIG_PATH = path.join(STATE_DIR, "ringtone-audio-path.txt");
 const LOG_PATH = path.join(STATE_DIR, "final-stop-ringtone.jsonl");
 const DEDUPE_PATH = path.join(STATE_DIR, "final-stop-ringtone-dedupe.json");
@@ -458,7 +460,9 @@ async function main() {
     return;
   }
 
-  if (shouldSuppressDuplicate(dedupeKeys)) {
+  // notify is the sole enabled completion source. Some Codex builds provide
+  // only "turn-ended", so a cwd/time dedupe would drop distinct completions.
+  if (!fromNotifyTurnEnded && shouldSuppressDuplicate(dedupeKeys)) {
     appendLog({
       event: "duplicate_suppressed",
       args,

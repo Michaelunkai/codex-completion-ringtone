@@ -1,0 +1,1 @@
+<physical Android serial from: adb shell getprop ro.serialno>
