@@ -4,7 +4,8 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
-const CODEX_HOME = "C:\\Users\\micha\\.codex";
+const USER_HOME = process.env.USERPROFILE || process.env.HOME || "";
+const CODEX_HOME = process.env.CODEX_HOME || path.join(USER_HOME, ".codex");
 const STATE_DIR = path.join(CODEX_HOME, "hooks", "completion-alert-state");
 const FINAL_STOP_RINGTONE = path.join(CODEX_HOME, "hooks", "codex-final-stop-ringtone.mjs");
 

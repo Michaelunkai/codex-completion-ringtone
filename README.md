@@ -1,6 +1,8 @@
 # Codex completion ringtone (Windows)
 
-This is a preserve-first, portable implementation reference for a local ringtone that starts **only when Codex reports `turn-ended`**.  It contains copies of the working hook sources, not a replacement for an existing installation.
+This is a preserve-first, portable implementation of a local ringtone that starts **only when Codex reports `turn-ended`**. It contains hook sources, a backup-first installer, isolated verification, production checks, and continuation documentation.
+
+The repository is separate from the live `%USERPROFILE%\.codex` installation. Building and testing it does not overwrite a working Codex configuration.
 
 ## Trigger path
 
@@ -22,8 +24,11 @@ The direct local player is the primary behavior. Android and ntfy notifications 
 | `src/codex-final-stop-ringtone.mjs` | Completion gate and player | Yes, after backup and path review |
 | `src/ensure-finish-ringtone-wiring.mjs` | Optional repair guard | Yes, only when its paths match your installation |
 | `src/hook-lib.mjs` | JSON stdin helper required by final hook | Yes |
+| `scripts/Install-CodexCompletionRingtone.ps1` | Backup-first installer with `-WhatIf` | Run from this repository |
 | `tests/verify-package.ps1` | Static package checks; no sound | Run before deployment |
+| `tests/Test-Installer.ps1` | Isolated temporary-home installer test | Run before deployment |
 | `tests/Test-ProductionRingtone.ps1` | Read-only production wiring check | Run after deployment |
+| `docs/` | Architecture, installation, operations, implementation, and continuation guides | Read before changing behavior |
 
 No audio file, local audio-path file, runtime state, ntfy topic, or ntfy token is published. The reference source intentionally obtains optional ntfy settings from environment variables.
 
@@ -34,7 +39,26 @@ No audio file, local audio-path file, runtime state, ntfy topic, or ntfy token i
 - Write access to `%USERPROFILE%\.codex`.
 - A WAV ringtone. `System.Media.SoundPlayer` reliably plays WAV; an unavailable audio file falls back to an audible Windows beep melody.
 
-## Safe installation procedure
+## Quick start
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\verify-package.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\Test-Installer.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\Test-WiringGuard.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Install-CodexCompletionRingtone.ps1 `
+  -AudioPath 'C:\absolute\path\to\ringtone.wav' `
+  -WhatIf
+```
+
+After reviewing the preview, rerun the installer without `-WhatIf`, restart Codex, and run:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\Test-ProductionRingtone.ps1
+```
+
+See [`docs/INSTALLATION.md`](docs/INSTALLATION.md) for every option, backup behavior, manual installation, path overrides, and rollback.
+
+## Manual installation procedure
 
 1. Back up the live files before touching them:
 
@@ -73,6 +97,8 @@ From this project directory:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\verify-package.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\Test-Installer.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\Test-WiringGuard.ps1
 ```
 
 On the target machine after installation:
@@ -98,6 +124,18 @@ Check `completion-alert-state\final-stop-ringtone.jsonl` for `local_player_start
 - **Phone push fails:** this is non-blocking. Its log status does not prove or disprove local audio. Verify environment variables separately.
 
 For a future change, copy the production files to a timestamped backup, reproduce the bug using the synthetic command, modify only the copied/reference source, run both test scripts, then apply the smallest matching production edit. Preserve the `turn-ended` gate and the disabled legacy watcher unless deliberately redesigning completion semantics.
+
+## Documentation map
+
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): event flow, deduplication, audio selection, optional channels, and invariants.
+- [`docs/INSTALLATION.md`](docs/INSTALLATION.md): automated/manual setup, backups, rollback, and validation.
+- [`docs/OPERATIONS.md`](docs/OPERATIONS.md): logs, health checks, tests, and failure diagnosis.
+- [`docs/IMPLEMENTATION.md`](docs/IMPLEMENTATION.md): from-scratch guide for another developer.
+- [`docs/CONTINUATION.md`](docs/CONTINUATION.md): exact repository/live-system boundary and future-session checklist.
+
+## License
+
+MIT. See [`LICENSE`](LICENSE).
 
 ## Current evidence
 

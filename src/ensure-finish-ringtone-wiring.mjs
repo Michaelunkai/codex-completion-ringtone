@@ -4,17 +4,22 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 
-const CODEX_HOME = "C:\\Users\\micha\\.codex";
+const USER_HOME = process.env.USERPROFILE || process.env.HOME || "";
+const CODEX_HOME = process.env.CODEX_HOME || path.join(USER_HOME, ".codex");
 const CONFIG_PATH = path.join(CODEX_HOME, "config.toml");
 const HOOKS_PATH = path.join(CODEX_HOME, "hooks.json");
 const STATE_DIR = path.join(CODEX_HOME, "hooks", "completion-alert-state");
 const LOG_PATH = path.join(STATE_DIR, "finish-ringtone-wiring-guard.jsonl");
-const NODE_EXE = "C:\\Program Files\\nodejs\\node.exe";
+const NODE_EXE = process.env.CODEX_NODE_EXE || "C:\\Program Files\\nodejs\\node.exe";
+const NOTIFY_WRAPPER_PATH = path.join(CODEX_HOME, "hooks", "codex-finish-ringtone-notify.mjs");
+const escapeTomlBasicString = (value) => String(value).replaceAll("\\", "\\\\").replaceAll('"', '\\"');
 const NOTIFY_WRAPPER_LINE =
-  'notify = [ "C:\\\\Program Files\\\\nodejs\\\\node.exe", "C:\\\\Users\\\\micha\\\\.codex\\\\hooks\\\\codex-finish-ringtone-notify.mjs", "turn-ended" ]';
+  `notify = [ "${escapeTomlBasicString(NODE_EXE)}", "${escapeTomlBasicString(NOTIFY_WRAPPER_PATH)}", "turn-ended" ]`;
+const PREVIOUS_NOTIFY_JSON = JSON.stringify([NODE_EXE, NOTIFY_WRAPPER_PATH, "turn-ended"]);
+const SKIP_TASK_CHANGES = process.env.CODEX_RINGTONE_SKIP_TASK_CHANGES === "1";
 const WATCHDOG_TASK_NAME = "CodexTranscriptFinishRingtoneWatcher";
 const DISABLED_WATCHER_COMMAND =
-  'node "C:\\Users\\micha\\.codex\\hooks\\async-node-hook.mjs" "C:\\Users\\micha\\.codex\\hooks\\kill-stale-email-watchers.mjs" session-completion-alert-disabled';
+  `node "${path.join(CODEX_HOME, "hooks", "async-node-hook.mjs")}" "${path.join(CODEX_HOME, "hooks", "kill-stale-email-watchers.mjs")}" session-completion-alert-disabled`;
 
 function ensureDir(dirPath) {
   fs.mkdirSync(dirPath, { recursive: true });
@@ -28,16 +33,37 @@ function appendLog(payload) {
 function updateConfig() {
   let text = fs.readFileSync(CONFIG_PATH, "utf8");
   const before = text;
-  if (/^notify\s*=.*$/m.test(text)) {
-    text = text.replace(/^notify\s*=.*$/m, NOTIFY_WRAPPER_LINE);
-  } else {
+  const notifyMatches = [...text.matchAll(/^(?:\uFEFF)?\s*notify\s*=.*$/gm)];
+  if (notifyMatches.length > 1) {
+    return { changed: false, mode: "multiple-notify-lines-preserved" };
+  }
+  if (notifyMatches.length === 0) {
     text = `${NOTIFY_WRAPPER_LINE}\n${text}`;
+  } else {
+    const current = notifyMatches[0][0];
+    let replacement = current;
+    if (/"--previous-notify"\s*,\s*"(?:\\.|[^"])*"/.test(current)) {
+      replacement = current.replace(
+        /"--previous-notify"\s*,\s*"(?:\\.|[^"])*"/,
+        `"--previous-notify", "${escapeTomlBasicString(PREVIOUS_NOTIFY_JSON)}"`
+      );
+    } else if (current.includes("codex-finish-ringtone-notify.mjs")) {
+      replacement = NOTIFY_WRAPPER_LINE;
+    } else {
+      return { changed: false, mode: "unrelated-notify-owner-preserved" };
+    }
+    text = text.replace(current, replacement);
   }
   if (text !== before) {
     fs.writeFileSync(CONFIG_PATH, text, "utf8");
-    return true;
+    return {
+      changed: true,
+      mode: notifyMatches.length === 0
+        ? "direct-added"
+        : (notifyMatches[0][0].includes("--previous-notify") ? "outer-wrapper-preserved" : "direct-updated"),
+    };
   }
-  return false;
+  return { changed: false, mode: "already-correct" };
 }
 
 function walkHooks(value, visitor) {
@@ -139,6 +165,9 @@ function updateHooks() {
 }
 
 function disableWatchdogTask() {
+  if (SKIP_TASK_CHANGES) {
+    return null;
+  }
   const result = spawnSync("schtasks.exe", ["/Change", "/TN", WATCHDOG_TASK_NAME, "/Disable"], {
     encoding: "utf8", windowsHide: true, timeout: 10000,
   });
@@ -146,6 +175,9 @@ function disableWatchdogTask() {
 }
 
 function hardenWatchdogTaskSettings() {
+  if (SKIP_TASK_CHANGES) {
+    return;
+  }
   const exported = spawnSync("schtasks.exe", ["/Query", "/TN", WATCHDOG_TASK_NAME, "/XML"], {
     encoding: "utf8",
     windowsHide: true,
@@ -179,7 +211,18 @@ function hardenWatchdogTaskSettings() {
   }
 }
 
-const configChanged = updateConfig();
+const configResult = updateConfig();
 const hooksChanged = updateHooks();
 const watchdogDisabled = disableWatchdogTask();
-appendLog({ event: "checked", configChanged, hooksChanged, watchdogDisabled, notifyTurnEndedRingtone: true, taskCompleteWatcher: false, hookRingtone: true, ringtoneTrigger: "turn_ended_only" });
+appendLog({
+  event: "checked",
+  configChanged: configResult.changed,
+  configMode: configResult.mode,
+  hooksChanged,
+  watchdogDisabled,
+  taskChangesSkipped: SKIP_TASK_CHANGES,
+  notifyTurnEndedRingtone: true,
+  taskCompleteWatcher: false,
+  hookRingtone: true,
+  ringtoneTrigger: "turn_ended_only",
+});

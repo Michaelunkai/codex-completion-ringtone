@@ -6,7 +6,8 @@ import https from "node:https";
 import path from "node:path";
 import { parseHookInput } from "./hook-lib.mjs";
 
-const CODEX_HOME = "C:\\Users\\micha\\.codex";
+const USER_HOME = process.env.USERPROFILE || process.env.HOME || "";
+const CODEX_HOME = process.env.CODEX_HOME || path.join(USER_HOME, ".codex");
 const STATE_DIR = path.join(CODEX_HOME, "hooks", "completion-alert-state");
 const SESSIONS_DIR = path.join(CODEX_HOME, "sessions");
 const PS1_PATH = path.join(STATE_DIR, "Play-CodexCompletionRingtone.ps1");

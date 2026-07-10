@@ -5,6 +5,7 @@ completion-alert-state/
 *.lock
 .env
 .env.*
+.serena/
 
 # Do not publish audio or a machine-specific audio path.
 *.wav
